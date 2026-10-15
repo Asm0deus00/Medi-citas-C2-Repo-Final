@@ -1,0 +1,14 @@
+require('dotenv').config();
+const express = require('express');
+const swaggerUi = require('swagger-ui-express');
+const YAML = require('yamljs');
+const apiRoutes = require('./routes/api.routes');
+const errors = require('./middleware/errors');
+const app = express();
+app.use(express.json({ limit: '1mb' }));
+app.get('/', (req, res) => res.redirect('/api-docs'));
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(YAML.load(require('path').join(__dirname, '../docs/openapi.yaml'))));
+app.use('/api', apiRoutes);
+app.use((req, res) => res.status(404).json({ error: 'Ruta no encontrada' }));
+app.use(errors);
+module.exports = app;

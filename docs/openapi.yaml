@@ -1,0 +1,1828 @@
+openapi: 3.0.3
+info:
+  title: MediCita API
+  version: 1.2.0
+  description: 'API académica Corte 2 con autenticación Bearer y control de acceso por paciente/administrador.
+    Las contraseñas se almacenan en texto plano exclusivamente por instrucción del corte: usar solo datos
+    ficticios.'
+servers:
+- url: http://localhost:5000/api
+tags:
+- name: Inicio de sesión
+  description: Comprobar correo y contraseña.
+- name: Pacientes
+  description: Agregar, ver y administrar pacientes.
+- name: Usuarios
+  description: Agregar, ver y administrar usuarios.
+- name: Médicos
+  description: Agregar, ver y administrar médicos.
+- name: Especialidades
+  description: Agregar, ver y administrar especialidades.
+- name: Horarios
+  description: Agregar, ver y administrar horarios.
+- name: Etiquetas de reseñas
+  description: Agregar, ver y administrar etiquetas.
+- name: Citas
+  description: Agendar y gestionar citas médicas.
+- name: Reseñas
+  description: Calificaciones y comentarios después de citas atendidas.
+- name: Resultados médicos
+  description: Resultados de exámenes numéricos, cualitativos y de imagenología.
+paths:
+  /auth/login:
+    post:
+      tags:
+      - Inicio de sesión
+      summary: Iniciar sesión
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - email
+              - password
+              properties:
+                email:
+                  type: string
+                  example: paciente@ejemplo.com
+                password:
+                  type: string
+                  example: clave123
+      responses:
+        '200':
+          description: Credenciales válidas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      patient_id:
+                        type: integer
+                        nullable: true
+                      email:
+                        type: string
+                      role:
+                        type: string
+                        enum:
+                        - patient
+                        - admin
+                  token:
+                    type: string
+                    description: Token Bearer con expiración de una hora.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+      security: []
+  /appointments:
+    get:
+      tags:
+      - Citas
+      summary: Ver citas
+      parameters:
+      - name: patientId
+        in: query
+        schema:
+          type: integer
+      - name: date
+        in: query
+        description: Fecha YYYY-MM-DD de la agenda; solo administrador puede consultar todas las citas
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    patient_id:
+                      type: integer
+                    doctor_id:
+                      type: integer
+                    starts_at:
+                      type: string
+                    duration_minutes:
+                      type: integer
+                    price_at_booking:
+                      type: number
+                    status:
+                      type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    post:
+      tags:
+      - Citas
+      summary: Agendar cita
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - patient_id
+              - doctor_id
+              - starts_at
+              properties:
+                patient_id:
+                  type: integer
+                  example: 1
+                doctor_id:
+                  type: integer
+                  example: 1
+                starts_at:
+                  type: string
+                  example: 2026-11-18T09:00
+                duration_minutes:
+                  type: integer
+                  example: 30
+      responses:
+        '201':
+          description: Cita creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  patient_id:
+                    type: integer
+                  doctor_id:
+                    type: integer
+                  starts_at:
+                    type: string
+                  duration_minutes:
+                    type: integer
+                  price_at_booking:
+                    type: number
+                  status:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+  /appointments/{id}:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      tags:
+      - Citas
+      summary: Consultar cita
+      responses:
+        '200':
+          description: Cita
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  patient_id:
+                    type: integer
+                  doctor_id:
+                    type: integer
+                  starts_at:
+                    type: string
+                  duration_minutes:
+                    type: integer
+                  price_at_booking:
+                    type: number
+                  status:
+                    type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    patch:
+      tags:
+      - Citas
+      summary: Actualizar cita
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                  - scheduled
+                  - completed
+                  - cancelled
+      responses:
+        '200':
+          description: Cita actualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  patient_id:
+                    type: integer
+                  doctor_id:
+                    type: integer
+                  starts_at:
+                    type: string
+                  duration_minutes:
+                    type: integer
+                  price_at_booking:
+                    type: number
+                  status:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    delete:
+      tags:
+      - Citas
+      summary: Eliminar cita
+      responses:
+        '204':
+          description: Eliminada
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+  /reviews:
+    get:
+      tags:
+      - Reseñas
+      summary: Ver reseñas
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    appointment_id:
+                      type: integer
+                    rating:
+                      type: integer
+                    comment:
+                      type: string
+                    wait_minutes:
+                      type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+      security:
+      - BearerAuth: []
+    post:
+      tags:
+      - Reseñas
+      summary: Agregar reseña
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - appointment_id
+              - rating
+              properties:
+                appointment_id:
+                  type: integer
+                  example: 1
+                rating:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                  example: 5
+                comment:
+                  type: string
+                  nullable: true
+                  example: Buena atención
+                wait_minutes:
+                  type: integer
+                  nullable: true
+                  example: 10
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  appointment_id:
+                    type: integer
+                  rating:
+                    type: integer
+                  comment:
+                    type: string
+                  wait_minutes:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+  /reviews/{id}:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      tags:
+      - Reseñas
+      summary: Consultar reseña
+      responses:
+        '200':
+          description: Reseña
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  appointment_id:
+                    type: integer
+                  rating:
+                    type: integer
+                  comment:
+                    type: string
+                  wait_minutes:
+                    type: integer
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    patch:
+      tags:
+      - Reseñas
+      summary: Editar reseña
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rating:
+                  type: integer
+                comment:
+                  type: string
+                  nullable: true
+                wait_minutes:
+                  type: integer
+                  nullable: true
+      responses:
+        '200':
+          description: Actualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  appointment_id:
+                    type: integer
+                  rating:
+                    type: integer
+                  comment:
+                    type: string
+                  wait_minutes:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    delete:
+      tags:
+      - Reseñas
+      summary: Eliminar reseña
+      responses:
+        '204':
+          description: Eliminada
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+  /reviews/{id}/tags:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      tags:
+      - Reseñas
+      summary: Ver etiquetas de reseña
+      responses:
+        '200':
+          description: Etiquetas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  appointment_id:
+                    type: integer
+                  rating:
+                    type: integer
+                  comment:
+                    type: string
+                  wait_minutes:
+                    type: integer
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    put:
+      tags:
+      - Reseñas
+      summary: Cambiar etiquetas de reseña
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tags:
+                  type: array
+                  items:
+                    type: integer
+              example:
+                tags:
+                - 1
+      responses:
+        '200':
+          description: Etiquetas actualizadas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  appointment_id:
+                    type: integer
+                  rating:
+                    type: integer
+                  comment:
+                    type: string
+                  wait_minutes:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+  /medical-results:
+    get:
+      tags:
+      - Resultados médicos
+      summary: Ver resultados médicos
+      parameters:
+      - name: patientId
+        in: query
+        schema:
+          type: integer
+      - name: type
+        in: query
+        schema:
+          type: string
+          enum:
+          - numeric
+          - qualitative
+          - imaging
+      responses:
+        '200':
+          description: Resultados
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    patient_id:
+                      type: integer
+                    exam_name:
+                      type: string
+                    result_type:
+                      type: string
+                    created_at:
+                      type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+      security:
+      - BearerAuth: []
+    post:
+      tags:
+      - Resultados médicos
+      summary: Agregar resultado médico
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                patient_id: 1
+                exam_name: Glucosa
+                result_type: numeric
+                measured_value: 90
+                unit: mg/dL
+                reference_min: 70
+                reference_max: 99
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  patient_id:
+                    type: integer
+                  exam_name:
+                    type: string
+                  result_type:
+                    type: string
+                  created_at:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+  /medical-results/{id}:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      tags:
+      - Resultados médicos
+      summary: Consultar resultado médico
+      responses:
+        '200':
+          description: Resultado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  patient_id:
+                    type: integer
+                  exam_name:
+                    type: string
+                  result_type:
+                    type: string
+                  created_at:
+                    type: string
+                  detail:
+                    type: object
+                    description: Valores específicos del examen, según result_type
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    patch:
+      tags:
+      - Resultados médicos
+      summary: Editar resultado médico
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  patient_id:
+                    type: integer
+                  exam_name:
+                    type: string
+                  result_type:
+                    type: string
+                  created_at:
+                    type: string
+                  detail:
+                    type: object
+                    description: Valores específicos del examen, según result_type
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    delete:
+      tags:
+      - Resultados médicos
+      summary: Eliminar resultado médico
+      responses:
+        '204':
+          description: Eliminado
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+  /patients:
+    get:
+      tags:
+      - Pacientes
+      summary: Ver pacientes
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    full_name:
+                      type: string
+                    email:
+                      type: string
+                    phone:
+                      type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: search
+        in: query
+        description: Buscar pacientes por nombre o correo; solo administrador
+        schema:
+          type: string
+    post:
+      tags:
+      - Pacientes
+      summary: Agregar paciente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                full_name: Ana Ruiz
+                email: ana.prueba@example.com
+                phone: '3001234567'
+              properties:
+                full_name:
+                  type: string
+                email:
+                  type: string
+                phone:
+                  type: string
+              required:
+              - full_name
+              - email
+      responses:
+        '201':
+          description: Recurso creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  full_name:
+                    type: string
+                  email:
+                    type: string
+                  phone:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security: []
+  /patients/{id}:
+    get:
+      tags:
+      - Pacientes
+      summary: Consultar paciente
+      responses:
+        '200':
+          description: Registro
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  full_name:
+                    type: string
+                  email:
+                    type: string
+                  phone:
+                    type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    patch:
+      tags:
+      - Pacientes
+      summary: Editar paciente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Campos a modificar de paciente
+              example:
+                full_name: Ana Ruiz
+      responses:
+        '200':
+          description: Actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  full_name:
+                    type: string
+                  email:
+                    type: string
+                  phone:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    delete:
+      tags:
+      - Pacientes
+      summary: Eliminar paciente
+      responses:
+        '204':
+          description: Eliminado
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID del paciente
+      schema:
+        type: integer
+        minimum: 1
+  /users:
+    get:
+      tags:
+      - Usuarios
+      summary: Ver usuarios
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    patient_id:
+                      type: integer
+                    email:
+                      type: string
+                    role:
+                      type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    post:
+      tags:
+      - Usuarios
+      summary: Agregar usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                patient_id: 1
+                email: ana.prueba@example.com
+                password: clavePrueba123
+                role: patient
+              properties:
+                patient_id:
+                  type: integer
+                email:
+                  type: string
+                password:
+                  type: string
+                role:
+                  type: string
+              required:
+              - patient_id
+              - email
+              - password
+              - role
+      responses:
+        '201':
+          description: Recurso creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  patient_id:
+                    type: integer
+                  email:
+                    type: string
+                  role:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+      security: []
+  /users/{id}:
+    get:
+      tags:
+      - Usuarios
+      summary: Consultar usuario
+      responses:
+        '200':
+          description: Registro
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  patient_id:
+                    type: integer
+                  email:
+                    type: string
+                  role:
+                    type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID del usuario
+      schema:
+        type: integer
+        minimum: 1
+  /doctors:
+    get:
+      tags:
+      - Médicos
+      summary: Ver médicos activos con especialidad y horarios
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    full_name:
+                      type: string
+                    specialty_id:
+                      type: integer
+                    specialty_name:
+                      type: string
+                    schedule_description:
+                      type: string
+                    consultation_price:
+                      type: number
+                    profile:
+                      type: string
+                    active:
+                      type: integer
+                    schedules:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          doctor_id:
+                            type: integer
+                          weekday:
+                            type: integer
+                          start_time:
+                            type: string
+                          end_time:
+                            type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security: []
+    post:
+      tags:
+      - Médicos
+      summary: Agregar médico
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                full_name: Carlos Rojas
+                specialty_id: 1
+                schedule_description: Lunes a viernes de 8 a 12
+                consultation_price: 85000
+                profile: Médico con experiencia clínica
+                active: 1
+              properties:
+                full_name:
+                  type: string
+                specialty_id:
+                  type: integer
+                schedule_description:
+                  type: string
+                consultation_price:
+                  type: integer
+                profile:
+                  type: string
+                active:
+                  type: integer
+              required:
+              - full_name
+              - specialty_id
+              - schedule_description
+              - consultation_price
+              - active
+      responses:
+        '201':
+          description: Recurso creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  full_name:
+                    type: string
+                  specialty_id:
+                    type: integer
+                  specialty_name:
+                    type: string
+                  schedule_description:
+                    type: string
+                  consultation_price:
+                    type: number
+                  profile:
+                    type: string
+                  active:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+  /doctors/{id}:
+    get:
+      tags:
+      - Médicos
+      summary: Consultar médico
+      responses:
+        '200':
+          description: Registro
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  full_name:
+                    type: string
+                  specialty_id:
+                    type: integer
+                  specialty_name:
+                    type: string
+                  schedule_description:
+                    type: string
+                  consultation_price:
+                    type: number
+                  profile:
+                    type: string
+                  active:
+                    type: integer
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security: []
+    patch:
+      tags:
+      - Médicos
+      summary: Editar médico
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Campos a modificar de médico
+              example:
+                full_name: Carlos Rojas
+      responses:
+        '200':
+          description: Actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  full_name:
+                    type: string
+                  specialty_id:
+                    type: integer
+                  specialty_name:
+                    type: string
+                  schedule_description:
+                    type: string
+                  consultation_price:
+                    type: number
+                  profile:
+                    type: string
+                  active:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    delete:
+      tags:
+      - Médicos
+      summary: Eliminar médico
+      responses:
+        '204':
+          description: Eliminado
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID del médico
+      schema:
+        type: integer
+        minimum: 1
+  /specialties:
+    get:
+      tags:
+      - Especialidades
+      summary: Ver especialidades
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security: []
+    post:
+      tags:
+      - Especialidades
+      summary: Agregar especialidad
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                name: Medicina familiar
+              properties:
+                name:
+                  type: string
+              required:
+              - name
+      responses:
+        '201':
+          description: Recurso creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+  /specialties/{id}:
+    get:
+      tags:
+      - Especialidades
+      summary: Consultar especialidad
+      responses:
+        '200':
+          description: Registro
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security: []
+    patch:
+      tags:
+      - Especialidades
+      summary: Editar especialidad
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Campos a modificar de especialidad
+              example:
+                name: Medicina familiar
+      responses:
+        '200':
+          description: Actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    delete:
+      tags:
+      - Especialidades
+      summary: Eliminar especialidad
+      responses:
+        '204':
+          description: Eliminado
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID del especialidad
+      schema:
+        type: integer
+        minimum: 1
+  /doctor_schedules:
+    get:
+      tags:
+      - Horarios
+      summary: Ver horarios
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    doctor_id:
+                      type: integer
+                    weekday:
+                      type: integer
+                    start_time:
+                      type: string
+                    end_time:
+                      type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security: []
+    post:
+      tags:
+      - Horarios
+      summary: Agregar horario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                doctor_id: 1
+                weekday: 1
+                start_time: 08:00
+                end_time: '12:00'
+              properties:
+                doctor_id:
+                  type: integer
+                weekday:
+                  type: integer
+                start_time:
+                  type: string
+                end_time:
+                  type: string
+              required:
+              - doctor_id
+              - weekday
+              - start_time
+              - end_time
+      responses:
+        '201':
+          description: Recurso creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  doctor_id:
+                    type: integer
+                  weekday:
+                    type: integer
+                  start_time:
+                    type: string
+                  end_time:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+  /doctor_schedules/{id}:
+    get:
+      tags:
+      - Horarios
+      summary: Consultar horario
+      responses:
+        '200':
+          description: Registro
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  doctor_id:
+                    type: integer
+                  weekday:
+                    type: integer
+                  start_time:
+                    type: string
+                  end_time:
+                    type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+      security: []
+    patch:
+      tags:
+      - Horarios
+      summary: Editar horario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Campos a modificar de horario
+              example:
+                doctor_id: 1
+      responses:
+        '200':
+          description: Actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  doctor_id:
+                    type: integer
+                  weekday:
+                    type: integer
+                  start_time:
+                    type: string
+                  end_time:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    delete:
+      tags:
+      - Horarios
+      summary: Eliminar horario
+      responses:
+        '204':
+          description: Eliminado
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID del horario
+      schema:
+        type: integer
+        minimum: 1
+  /review_tags:
+    get:
+      tags:
+      - Etiquetas de reseñas
+      summary: Ver etiquetas
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    post:
+      tags:
+      - Etiquetas de reseñas
+      summary: Agregar etiqueta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                name: Buena atención
+              properties:
+                name:
+                  type: string
+              required:
+              - name
+      responses:
+        '201':
+          description: Recurso creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+  /review_tags/{id}:
+    get:
+      tags:
+      - Etiquetas de reseñas
+      summary: Consultar etiqueta
+      responses:
+        '200':
+          description: Registro
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    patch:
+      tags:
+      - Etiquetas de reseñas
+      summary: Editar etiqueta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Campos a modificar de etiqueta
+              example:
+                name: Buena atención
+      responses:
+        '200':
+          description: Actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    delete:
+      tags:
+      - Etiquetas de reseñas
+      summary: Eliminar etiqueta
+      responses:
+        '204':
+          description: Eliminado
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      security:
+      - BearerAuth: []
+    parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID del etiqueta
+      schema:
+        type: integer
+        minimum: 1
+  /doctors/{id}/availability:
+    get:
+      tags:
+      - Médicos
+      summary: Consultar disponibilidad real
+      description: Espacios de 30 minutos para una fecha, excluyendo reservas existentes.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      security: []
+      responses:
+        '200':
+          description: Horarios libres
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  doctor_id:
+                    type: integer
+                  date:
+                    type: string
+                  slots:
+                    type: array
+                    items:
+                      type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /medical-results/{id}/image:
+    get:
+      tags:
+      - Resultados médicos
+      summary: Consultar archivo de imagenología
+      description: El archivo debe existir en el directorio privado, con acceso autorizado.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: Imagen o PDF descargable
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  responses:
+    BadRequest:
+      description: Datos inválidos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Credenciales inválidas
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Regla de negocio incumplida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: El usuario no tiene permisos para acceder al recurso
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Token HMAC
+      description: Inicie sesión en POST /auth/login. Copie el campo token al botón Authorize de Swagger.
