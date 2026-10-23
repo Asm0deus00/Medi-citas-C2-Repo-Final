@@ -1,26 +1,19 @@
 const pool = require('../config/database');
 const repository = require('../repositories/base.repository');
+const { runInTransaction } = require('../repositories/transaction');
 const validate = require('../utils/validate');
 const { ApiError } = require('../utils/errors');
 
 async function list(patientId) {
-  const query = patientId == null
-    ? {
-        sql: `SELECT review.*, appointment.doctor_id, appointment.patient_id
-              FROM reviews AS review
-              INNER JOIN appointments AS appointment ON appointment.id = review.appointment_id
-              ORDER BY review.id DESC`,
-        parameters: []
-      }
-    : {
-        sql: `SELECT review.*, appointment.doctor_id, appointment.patient_id
-              FROM reviews AS review
-              INNER JOIN appointments AS appointment ON appointment.id = review.appointment_id
-              WHERE appointment.patient_id = ?
-              ORDER BY review.id DESC`,
-        parameters: [validate.id(patientId)]
-      };
-  const [reviews] = await pool.query(query.sql, query.parameters);
+  const filterByPatient = patientId != null;
+  const [reviews] = await pool.query(
+    `SELECT review.*, appointment.doctor_id, appointment.patient_id
+     FROM reviews AS review
+     INNER JOIN appointments AS appointment ON appointment.id = review.appointment_id
+     ${filterByPatient ? 'WHERE appointment.patient_id = ?' : ''}
+     ORDER BY review.id DESC`,
+    filterByPatient ? [validate.id(patientId)] : []
+  );
   return reviews;
 }
 
@@ -36,8 +29,11 @@ async function create(body) {
   if (rating < 1 || rating > 5) throw new ApiError(400, 'La calificación debe estar entre 1 y 5');
 
   const comment = validate.optionalText(body.comment, 'comment', 2000);
-  const waitMinutes = body.wait_minutes == null ? null : validate.integer(body.wait_minutes, 'wait_minutes', 0);
-  const [[appointment]] = await pool.query('SELECT status FROM appointments WHERE id = ?', [appointmentId]);
+  const waitMinutes =
+    body.wait_minutes == null ? null : validate.integer(body.wait_minutes, 'wait_minutes', 0);
+  const [[appointment]] = await pool.query('SELECT status FROM appointments WHERE id = ?', [
+    appointmentId
+  ]);
   if (!appointment || appointment.status !== 'completed') {
     throw new ApiError(409, 'Solo se puede reseñar una cita atendida');
   }
@@ -57,9 +53,11 @@ async function edit(reviewId, body) {
     updatedFields.rating = validate.integer(body.rating, 'rating');
     if (updatedFields.rating > 5) throw new ApiError(400, 'Calificación inválida');
   }
-  if (body.comment !== undefined) updatedFields.comment = validate.optionalText(body.comment, 'comment', 2000);
+  if (body.comment !== undefined)
+    updatedFields.comment = validate.optionalText(body.comment, 'comment', 2000);
   if (body.wait_minutes !== undefined) {
-    updatedFields.wait_minutes = body.wait_minutes === null ? null : validate.integer(body.wait_minutes, 'wait_minutes', 0);
+    updatedFields.wait_minutes =
+      body.wait_minutes === null ? null : validate.integer(body.wait_minutes, 'wait_minutes', 0);
   }
   if (!Object.keys(updatedFields).length) throw new ApiError(400, 'Sin campos para actualizar');
 
@@ -68,49 +66,47 @@ async function edit(reviewId, body) {
   return get(reviewId);
 }
 
-async function setTags(reviewId, tagIds) {
-  const numericReviewId = validate.id(reviewId);
-  await get(numericReviewId);
-  if (!Array.isArray(tagIds)) throw new ApiError(400, 'tags debe ser una lista de identificadores');
-  const uniqueTagIds = [...new Set(tagIds.map(tagId => validate.id(tagId)))];
-  const connection = await pool.getConnection();
+async function assertTagsExist(connection, tagIds) {
+  if (!tagIds.length) return;
+  const placeholders = tagIds.map(() => '?').join(', ');
+  const [existingTags] = await connection.query(
+    `SELECT id FROM review_tags WHERE id IN (${placeholders})`,
+    tagIds
+  );
+  if (existingTags.length !== tagIds.length)
+    throw new ApiError(400, 'Una o más etiquetas no existen');
+}
 
-  try {
-    await connection.beginTransaction();
-    if (uniqueTagIds.length) {
-      const placeholders = uniqueTagIds.map(() => '?').join(', ');
-      const [existingTags] = await connection.query(
-        `SELECT id FROM review_tags WHERE id IN (${placeholders})`,
-        uniqueTagIds
-      );
-      if (existingTags.length !== uniqueTagIds.length) throw new ApiError(400, 'Una o más etiquetas no existen');
-    }
-    await connection.query('DELETE FROM review_tag_assignments WHERE review_id = ?', [numericReviewId]);
+async function setTags(reviewId, tagIds) {
+  const validReviewId = validate.id(reviewId);
+  await get(validReviewId);
+  if (!Array.isArray(tagIds)) throw new ApiError(400, 'tags debe ser una lista de identificadores');
+  const uniqueTagIds = [...new Set(tagIds.map((tagId) => validate.id(tagId)))];
+
+  await runInTransaction(async (connection) => {
+    await assertTagsExist(connection, uniqueTagIds);
+    await connection.query('DELETE FROM review_tag_assignments WHERE review_id = ?', [
+      validReviewId
+    ]);
     for (const tagId of uniqueTagIds) {
       await connection.query(
         'INSERT INTO review_tag_assignments (review_id, tag_id) VALUES (?, ?)',
-        [numericReviewId, tagId]
+        [validReviewId, tagId]
       );
     }
-    await connection.commit();
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
-  return getTags(numericReviewId);
+  });
+  return getTags(validReviewId);
 }
 
 async function getTags(reviewId) {
-  const numericReviewId = validate.id(reviewId);
-  await get(numericReviewId);
+  const validReviewId = validate.id(reviewId);
+  await get(validReviewId);
   const [tags] = await pool.query(
     `SELECT tag.id, tag.name
      FROM review_tags AS tag
      INNER JOIN review_tag_assignments AS assignment ON assignment.tag_id = tag.id
      WHERE assignment.review_id = ? ORDER BY tag.name`,
-    [numericReviewId]
+    [validReviewId]
   );
   return tags;
 }

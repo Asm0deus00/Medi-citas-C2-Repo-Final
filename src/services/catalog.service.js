@@ -6,10 +6,26 @@ const { ApiError } = require('../utils/errors');
 const RESOURCE_DEFINITIONS = Object.freeze({
   specialties: { table: 'specialties', fields: { name: 'text' } },
   review_tags: { table: 'review_tags', fields: { name: 'text' } },
-  doctors: { table: 'doctors', fields: { full_name: 'text', specialty_id: 'id', schedule_description: 'text', consultation_price: 'price', profile: 'optional', active: 'flag' } },
+  doctors: {
+    table: 'doctors',
+    fields: {
+      full_name: 'text',
+      specialty_id: 'id',
+      schedule_description: 'text',
+      consultation_price: 'price',
+      profile: 'optional',
+      active: 'flag'
+    }
+  },
   patients: { table: 'patients', fields: { full_name: 'text', email: 'email', phone: 'optional' } },
-  users: { table: 'users', fields: { patient_id: 'id', email: 'email', password: 'text', role: 'role' } },
-  doctor_schedules: { table: 'doctor_schedules', fields: { doctor_id: 'id', weekday: 'weekday', start_time: 'time', end_time: 'time' } }
+  users: {
+    table: 'users',
+    fields: { patient_id: 'id', email: 'email', password: 'text', role: 'role' }
+  },
+  doctor_schedules: {
+    table: 'doctor_schedules',
+    fields: { doctor_id: 'id', weekday: 'weekday', start_time: 'time', end_time: 'time' }
+  }
 });
 
 function getResourceDefinition(resourceName) {
@@ -24,77 +40,104 @@ function parseFields(definition, body, partial = false) {
     if (partial && body[fieldName] === undefined) continue;
     const fieldValue = body[fieldName];
     switch (fieldType) {
-      case 'text': parsedFields[fieldName] = validate.requiredText(fieldValue, fieldName); break;
-      case 'optional': parsedFields[fieldName] = validate.optionalText(fieldValue, fieldName, 1000); break;
-      case 'id': parsedFields[fieldName] = validate.id(fieldValue); break;
-      case 'email': parsedFields[fieldName] = validate.email(fieldValue); break;
-      case 'price': parsedFields[fieldName] = validate.price(fieldValue); break;
-      case 'flag': parsedFields[fieldName] = validate.choice(fieldValue, fieldName, [0, 1]); break;
-      case 'role': parsedFields[fieldName] = validate.choice(fieldValue, fieldName, ['patient', 'admin']); break;
-      case 'weekday': parsedFields[fieldName] = validate.integer(fieldValue, fieldName, 0); break;
+      case 'text':
+        parsedFields[fieldName] = validate.requiredText(fieldValue, fieldName);
+        break;
+      case 'optional':
+        parsedFields[fieldName] = validate.optionalText(fieldValue, fieldName, 1000);
+        break;
+      case 'id':
+        parsedFields[fieldName] = validate.id(fieldValue);
+        break;
+      case 'email':
+        parsedFields[fieldName] = validate.email(fieldValue);
+        break;
+      case 'price':
+        parsedFields[fieldName] = validate.price(fieldValue);
+        break;
+      case 'flag':
+        parsedFields[fieldName] = validate.choice(fieldValue, fieldName, [0, 1]);
+        break;
+      case 'role':
+        parsedFields[fieldName] = validate.choice(fieldValue, fieldName, ['patient', 'admin']);
+        break;
+      case 'weekday':
+        parsedFields[fieldName] = validate.integer(fieldValue, fieldName, 0);
+        break;
       case 'time':
         if (typeof fieldValue !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(fieldValue)) {
           throw new ApiError(400, `Horario ${fieldName} inválido`);
         }
         parsedFields[fieldName] = fieldValue;
         break;
-      default: throw new ApiError(500, `Tipo de campo no configurado: ${fieldType}`);
+      default:
+        throw new ApiError(500, `Tipo de campo no configurado: ${fieldType}`);
     }
   }
 
   if (!Object.keys(parsedFields).length) throw new ApiError(400, 'No hay campos para actualizar');
-  if (parsedFields.weekday != null && parsedFields.weekday > 6) throw new ApiError(400, 'Día fuera de rango');
-  if (parsedFields.start_time && parsedFields.end_time && parsedFields.start_time >= parsedFields.end_time) {
+  if (parsedFields.weekday != null && parsedFields.weekday > 6)
+    throw new ApiError(400, 'Día fuera de rango');
+  if (
+    parsedFields.start_time &&
+    parsedFields.end_time &&
+    parsedFields.start_time >= parsedFields.end_time
+  ) {
     throw new ApiError(400, 'Horario inválido');
   }
   return parsedFields;
 }
 
+function omitPassword(user) {
+  const publicUser = { ...user };
+  delete publicUser.password;
+  return publicUser;
+}
+
+async function listActiveDoctors() {
+  const [doctors] = await pool.query(`
+    SELECT doctor.id, doctor.full_name, doctor.specialty_id,
+           specialty.name AS specialty_name, doctor.schedule_description,
+           doctor.consultation_price, doctor.profile, doctor.active
+    FROM doctors AS doctor
+    INNER JOIN specialties AS specialty ON specialty.id = doctor.specialty_id
+    WHERE doctor.active = 1
+    ORDER BY doctor.full_name
+  `);
+  const [schedules] = await pool.query(
+    'SELECT doctor_id, weekday, start_time, end_time FROM doctor_schedules ORDER BY weekday, start_time'
+  );
+  return doctors.map((doctor) => ({
+    ...doctor,
+    schedules: schedules.filter((schedule) => schedule.doctor_id === doctor.id)
+  }));
+}
+
+async function searchPatients(searchText) {
+  const searchTerm = validate.requiredText(searchText, 'search', 100);
+  const [patients] = await pool.query(
+    'SELECT * FROM patients WHERE full_name LIKE ? OR email LIKE ? ORDER BY id',
+    [`%${searchTerm}%`, `%${searchTerm}%`]
+  );
+  return patients;
+}
+
 async function list(resourceName, query = {}) {
   getResourceDefinition(resourceName);
-  if (resourceName === 'doctors') {
-    const [doctors] = await pool.query(`
-      SELECT doctor.id, doctor.full_name, doctor.specialty_id,
-             specialty.name AS specialty_name, doctor.schedule_description,
-             doctor.consultation_price, doctor.profile, doctor.active
-      FROM doctors AS doctor
-      INNER JOIN specialties AS specialty ON specialty.id = doctor.specialty_id
-      WHERE doctor.active = 1
-      ORDER BY doctor.full_name
-    `);
-    const [schedules] = await pool.query(
-      'SELECT doctor_id, weekday, start_time, end_time FROM doctor_schedules ORDER BY weekday, start_time'
-    );
-    return doctors.map(doctor => ({
-      ...doctor,
-      schedules: schedules.filter(schedule => schedule.doctor_id === doctor.id)
-    }));
-  }
-
+  if (resourceName === 'doctors') return listActiveDoctors();
   if (resourceName === 'patients' && query.search !== undefined) {
-    const searchTerm = validate.requiredText(query.search, 'search', 100);
-    const [patients] = await pool.query(
-      'SELECT * FROM patients WHERE full_name LIKE ? OR email LIKE ? ORDER BY id',
-      [`%${searchTerm}%`, `%${searchTerm}%`]
-    );
-    return patients;
+    return searchPatients(query.search);
   }
 
   const records = await repository.all(resourceName);
-  return resourceName === 'users'
-    ? records.map(({ password, ...safeUser }) => safeUser)
-    : records;
+  return resourceName === 'users' ? records.map(omitPassword) : records;
 }
 
 async function get(resourceName, recordId) {
   const definition = getResourceDefinition(resourceName);
   const record = await repository.one(definition.table, validate.id(recordId));
   if (!record) throw new ApiError(404, 'Registro no encontrado');
-  if (resourceName === 'users') {
-    const { password, ...safeUser } = record;
-    return safeUser;
-  }
-  return record;
+  return resourceName === 'users' ? omitPassword(record) : record;
 }
 
 async function create(resourceName, body) {
@@ -105,7 +148,9 @@ async function create(resourceName, body) {
 
   const fields = parseFields(definition, body || {});
   if (resourceName === 'users') {
-    const [[patient]] = await pool.query('SELECT email FROM patients WHERE id = ?', [fields.patient_id]);
+    const [[patient]] = await pool.query('SELECT email FROM patients WHERE id = ?', [
+      fields.patient_id
+    ]);
     if (!patient || patient.email !== fields.email) {
       throw new ApiError(400, 'El correo de la cuenta debe coincidir con el del paciente');
     }
@@ -115,7 +160,8 @@ async function create(resourceName, body) {
 
 async function edit(resourceName, recordId, body) {
   const definition = getResourceDefinition(resourceName);
-  if (resourceName === 'users') throw new ApiError(403, 'Las credenciales no se modifican por este recurso');
+  if (resourceName === 'users')
+    throw new ApiError(403, 'Las credenciales no se modifican por este recurso');
   const fields = parseFields(definition, body || {}, true);
   const updated = await repository.update(definition.table, validate.id(recordId), fields);
   if (!updated) throw new ApiError(404, 'Registro no encontrado');
@@ -124,9 +170,10 @@ async function edit(resourceName, recordId, body) {
 
 async function erase(resourceName, recordId) {
   const definition = getResourceDefinition(resourceName);
-  if (resourceName === 'users') throw new ApiError(403, 'La eliminación de cuentas requiere procedimiento administrativo');
+  if (resourceName === 'users')
+    throw new ApiError(403, 'La eliminación de cuentas requiere procedimiento administrativo');
   const deleted = await repository.remove(definition.table, validate.id(recordId));
   if (!deleted) throw new ApiError(404, 'Registro no encontrado');
 }
 
-module.exports = { definitions: RESOURCE_DEFINITIONS, list, get, create, edit, erase };
+module.exports = { list, get, create, edit, erase };
