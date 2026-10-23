@@ -16,12 +16,12 @@ La **desnormalización deliberada** es `appointments.price_at_booking`. Conserva
 
 ## Recursos REST
 
-- `/api/patients`, `/api/doctors`, `/api/specialties`, `/api/doctor_schedules`: listados, lectura individual, creación, actualización parcial y eliminación.
+- `/api/patients`, `/api/doctors`, `/api/specialties`, `/api/doctor-schedules`: listados, lectura individual, creación, actualización parcial y eliminación.
 - `/api/users`: alta de cuenta de paciente y consultas; modificación y eliminación de credenciales están restringidas en este corte.
-- `/api/sessions`: `POST` crea una sesión; verifica correo y contraseña y devuelve los datos no sensibles del usuario junto con un token Bearer.
+- `/api/users/sessions`: `POST` crea una sesión; verifica correo y contraseña y devuelve los datos no sensibles del usuario junto con un token Bearer.
 - `/api/appointments`: registra citas; `GET ?patientId=...` resuelve «mis citas» filtrando por paciente y su `status` separa pendientes, atendidas o canceladas. `PATCH /:id` actualiza estado.
 - `/api/reviews`: reseñas por cita atendida. `/api/reviews/:id/tags` obtiene o reemplaza sus etiquetas.
-- `/api/review_tags`: catálogo de etiquetas administrable.
+- `/api/review-tags`: catálogo de etiquetas administrable.
 - `/api/medical-results`: registra y filtra por paciente/tipo; `/api/medical-results/:id` devuelve los atributos comunes y el detalle especializado.
 
 Se prefieren sustantivos plurales y operaciones HTTP GET/POST/PATCH/PUT/DELETE según la intención. Las relaciones se representan mediante identificadores foráneos en el JSON y rutas hijas únicamente cuando se opera sobre asociaciones, como etiquetas de una reseña.

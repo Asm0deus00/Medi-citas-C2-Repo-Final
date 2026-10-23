@@ -89,13 +89,13 @@ La dirección de Swagger indicada es local: solo estará disponible mientras el 
 
 ## Autenticación y uso de la API
 
-El endpoint de inicio de sesión es `POST /api/sessions`. Cuando las credenciales son válidas, la API devuelve un token Bearer con una duración de una hora. En Swagger UI, utiliza el botón **Authorize** para introducir el token y probar los endpoints protegidos.
+El endpoint de inicio de sesión es `POST /api/users/sessions`. Cuando las credenciales son válidas, la API devuelve un token Bearer con una duración de una hora. En Swagger UI, utiliza el botón **Authorize** para introducir el token y probar los endpoints protegidos.
 
 Algunos endpoints principales son:
 
 | Método | Endpoint | Propósito |
 |---|---|---|
-| `POST` | `/api/sessions` | Iniciar sesión |
+| `POST` | `/api/users/sessions` | Iniciar sesión |
 | `GET` | `/api/doctors` | Consultar profesionales activos |
 | `GET` | `/api/doctors/{id}/availability?date=YYYY-MM-DD` | Consultar disponibilidad de un profesional |
 | `GET` | `/api/appointments` | Consultar citas permitidas para el usuario autenticado |

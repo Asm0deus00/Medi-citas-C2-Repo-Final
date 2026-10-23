@@ -261,7 +261,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/sessions",
+            "url": "{{baseUrl}}/users/sessions",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"ana.test@ejemplo.com\",\n  \"password\": \"clave123\"\n}"
@@ -304,7 +304,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/sessions",
+            "url": "{{baseUrl}}/users/sessions",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"ana.test@ejemplo.com\",\n  \"password\": \"incorrecta\"\n}"
@@ -602,7 +602,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/doctor_schedules",
+            "url": "{{baseUrl}}/doctor-schedules",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"doctor_id\": 1,\n  \"weekday\": 1,\n  \"start_time\": \"08:00\",\n  \"end_time\": \"12:00\"\n}"
@@ -630,7 +630,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/doctor_schedules",
+            "url": "{{baseUrl}}/doctor-schedules",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"doctor_id\": 1,\n  \"weekday\": 9,\n  \"start_time\": \"08:00\",\n  \"end_time\": \"12:00\"\n}"
@@ -988,7 +988,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/review_tags",
+            "url": "{{baseUrl}}/review-tags",
             "body": {
               "mode": "raw",
               "raw": "{\"name\": \"Puntualidad\"}"
@@ -1016,7 +1016,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/review_tags",
+            "url": "{{baseUrl}}/review-tags",
             "body": {
               "mode": "raw",
               "raw": "{}"

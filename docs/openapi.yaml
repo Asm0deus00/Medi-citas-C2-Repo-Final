@@ -29,7 +29,7 @@ tags:
 - name: Resultados médicos
   description: Resultados de exámenes numéricos, cualitativos y de imagenología.
 paths:
-  /sessions:
+  /users/sessions:
     post:
       tags:
       - Inicio de sesión
@@ -1396,7 +1396,7 @@ paths:
       schema:
         type: integer
         minimum: 1
-  /doctor_schedules:
+  /doctor-schedules:
     get:
       tags:
       - Horarios
@@ -1481,7 +1481,7 @@ paths:
           $ref: '#/components/responses/Forbidden'
       security:
       - BearerAuth: []
-  /doctor_schedules/{id}:
+  /doctor-schedules/{id}:
     get:
       tags:
       - Horarios
@@ -1571,7 +1571,7 @@ paths:
       schema:
         type: integer
         minimum: 1
-  /review_tags:
+  /review-tags:
     get:
       tags:
       - Etiquetas de reseñas
@@ -1637,7 +1637,7 @@ paths:
           $ref: '#/components/responses/Forbidden'
       security:
       - BearerAuth: []
-  /review_tags/{id}:
+  /review-tags/{id}:
     get:
       tags:
       - Etiquetas de reseñas
@@ -1825,4 +1825,4 @@ components:
       type: http
       scheme: bearer
       bearerFormat: Token HMAC
-      description: Inicie sesión en POST /sessions. Copie el campo token al botón Authorize de Swagger.
+      description: Inicie sesión en POST /users/sessions. Copie el campo token al botón Authorize de Swagger.
