@@ -1,12 +1,19 @@
 const pool = require('../config/database');
+const { ApiError } = require('../utils/errors');
 const ALLOWED_TABLES = new Set([
-  'specialties', 'review_tags', 'doctors', 'patients', 'users',
-  'doctor_schedules', 'appointments', 'reviews', 'medical_results'
+  'specialties',
+  'review_tags',
+  'doctors',
+  'patients',
+  'users',
+  'doctor_schedules',
+  'appointments',
+  'reviews',
+  'medical_results'
 ]);
 
 function assertTable(table) {
   if (!ALLOWED_TABLES.has(table)) {
-    const { ApiError } = require('../utils/errors');
     throw new ApiError(400, 'Tabla no permitida para el repositorio');
   }
   return table;
@@ -28,13 +35,12 @@ async function insert(table, fields) {
   assertTable(table);
   const keys = Object.keys(fields || {});
   if (!keys.length) {
-    const { ApiError } = require('../utils/errors');
     throw new ApiError(400, 'No hay campos para insertar');
   }
   const columns = keys.map(() => '??').join(', ');
   const placeholders = keys.map(() => '?').join(', ');
   const sql = `INSERT INTO ?? (${columns}) VALUES (${placeholders})`;
-  const [result] = await pool.query(sql, [table, ...keys, ...keys.map(key => fields[key])]);
+  const [result] = await pool.query(sql, [table, ...keys, ...keys.map((key) => fields[key])]);
   return result.insertId;
 }
 
@@ -42,12 +48,11 @@ async function update(table, id, fields) {
   assertTable(table);
   const keys = Object.keys(fields || {});
   if (!keys.length) {
-    const { ApiError } = require('../utils/errors');
     throw new ApiError(400, 'No hay campos para actualizar');
   }
   const assignments = keys.map(() => '?? = ?').join(', ');
   const sql = `UPDATE ?? SET ${assignments} WHERE id = ?`;
-  const params = [table, ...keys.flatMap(key => [key, fields[key]]), id];
+  const params = [table, ...keys.flatMap((key) => [key, fields[key]]), id];
   const [result] = await pool.query(sql, params);
   return result.affectedRows > 0;
 }
@@ -58,4 +63,4 @@ async function remove(table, id) {
   return result.affectedRows > 0;
 }
 
-module.exports = { all, one, insert, update, remove, assertTable };
+module.exports = { all, one, insert, update, remove };
