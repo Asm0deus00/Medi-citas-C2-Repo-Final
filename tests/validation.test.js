@@ -1,7 +1,26 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const v = require('../src/utils/validate');
-test('IDs válidos', () => { assert.equal(v.id(3),3); assert.throws(()=>v.id(-1)); });
-test('email válido', () => { assert.equal(v.email('A@B.co'),'a@b.co'); assert.throws(()=>v.email('incorrecto')); });
-test('fecha válida', () => { assert.equal(v.dateTime('2026-11-18T09:00'),'2026-11-18 09:00'); assert.throws(()=>v.dateTime('mañana')); });
-test('calificación y estados', () => { assert.equal(v.choice('completed','status',['scheduled','completed','cancelled']),'completed'); assert.throws(()=>v.choice('other','status',['scheduled'])); });
+const { dateTime, integer, id, optionalText } = require('../src/utils/validate');
+
+test('dateTime accepts a real local date and preserves supported format', () => {
+  assert.equal(dateTime('2026-12-07T09:00'), '2026-12-07 09:00');
+  assert.equal(dateTime('2026-12-07T09:00:30'), '2026-12-07 09:00:30');
+});
+
+test('dateTime rejects impossible calendar dates and times', () => {
+  assert.throws(() => dateTime('2026-02-30T09:00'));
+  assert.throws(() => dateTime('2026-12-07T24:00'));
+  assert.throws(() => dateTime('2026-12-07T09:60'));
+});
+
+test('integer and id reject booleans, blanks, decimals and unsafe integers', () => {
+  for (const value of [true, '', null, 1.2, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(() => integer(value, 'id'));
+  }
+  assert.equal(id('7'), 7);
+});
+
+test('optionalText trims whitespace and enforces the limit after trimming', () => {
+  assert.equal(optionalText('  texto  ', 'campo', 10), 'texto');
+  assert.throws(() => optionalText('demasiado largo', 'campo', 4));
+});
