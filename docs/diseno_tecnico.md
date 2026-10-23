@@ -18,7 +18,7 @@ La **desnormalización deliberada** es `appointments.price_at_booking`. Conserva
 
 - `/api/patients`, `/api/doctors`, `/api/specialties`, `/api/doctor_schedules`: listados, lectura individual, creación, actualización parcial y eliminación.
 - `/api/users`: alta de cuenta de paciente y consultas; modificación y eliminación de credenciales están restringidas en este corte.
-- `/api/auth/login`: verifica correo y contraseña, devuelve datos no sensibles del usuario.
+- `/api/sessions`: `POST` crea una sesión; verifica correo y contraseña y devuelve los datos no sensibles del usuario junto con un token Bearer.
 - `/api/appointments`: registra citas; `GET ?patientId=...` resuelve «mis citas» filtrando por paciente y su `status` separa pendientes, atendidas o canceladas. `PATCH /:id` actualiza estado.
 - `/api/reviews`: reseñas por cita atendida. `/api/reviews/:id/tags` obtiene o reemplaza sus etiquetas.
 - `/api/review_tags`: catálogo de etiquetas administrable.
@@ -28,7 +28,7 @@ Se prefieren sustantivos plurales y operaciones HTTP GET/POST/PATCH/PUT/DELETE s
 
 ## Arquitectura
 
-`routes` establece rutas, `controllers` traduce las solicitudes y respuestas HTTP, `services` ejecuta las reglas de negocio, `repositories` concentra el CRUD SQL básico y `config/database.js` contiene un pool MySQL2. `middleware/errors.js` transforma errores de negocio y de SQL en respuestas de la API. Las consultas usan parámetros de MySQL2.
+`routes` contiene un archivo por recurso y define qué middleware protege cada ruta, `controllers` traduce las solicitudes y respuestas HTTP, `services` ejecuta las reglas de negocio, `repositories` concentra el CRUD SQL básico, las transacciones y las consultas de propiedad, `middleware` separa la autenticación (token) de la autorización (rol y propiedad del paciente) y `config` contiene las constantes y el pool MySQL2. `middleware/errors.js` transforma errores de negocio y de SQL en respuestas de la API. Las consultas usan parámetros de MySQL2.
 
 ## Reglas de negocio
 

@@ -29,7 +29,7 @@ tags:
 - name: Resultados médicos
   description: Resultados de exámenes numéricos, cualitativos y de imagenología.
 paths:
-  /auth/login:
+  /sessions:
     post:
       tags:
       - Inicio de sesión
@@ -1825,4 +1825,4 @@ components:
       type: http
       scheme: bearer
       bearerFormat: Token HMAC
-      description: Inicie sesión en POST /auth/login. Copie el campo token al botón Authorize de Swagger.
+      description: Inicie sesión en POST /sessions. Copie el campo token al botón Authorize de Swagger.

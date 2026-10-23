@@ -261,7 +261,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/auth/login",
+            "url": "{{baseUrl}}/sessions",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"ana.test@ejemplo.com\",\n  \"password\": \"clave123\"\n}"
@@ -304,7 +304,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/auth/login",
+            "url": "{{baseUrl}}/sessions",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"ana.test@ejemplo.com\",\n  \"password\": \"incorrecta\"\n}"

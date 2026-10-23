@@ -29,13 +29,13 @@ La aplicación separa responsabilidades por capas:
 
 ```text
 src/
-├── config/        # Configuración y conexión con MySQL
+├── config/        # Constantes de configuración y conexión con MySQL
 ├── controllers/   # Manejo de solicitudes y respuestas HTTP
 ├── middleware/    # Autenticación, autorización y manejo de errores
-├── repositories/  # Acceso a los datos
-├── routes/        # Definición de endpoints
+├── repositories/  # Acceso a los datos (CRUD, transacciones y consultas de propiedad)
+├── routes/        # Un archivo de rutas por recurso, ensambladas en api.routes.js
 ├── services/      # Reglas de negocio
-└── utils/         # Validaciones y utilidades compartidas
+└── utils/         # Validaciones, cálculo de horarios y utilidades compartidas
 ```
 
 El esquema de base de datos se encuentra en `database/medicita.sql`; el contrato de la API está en `docs/openapi.yaml`, y la colección de solicitudes de Postman está en `postman/MediCita.postman_collection.json`.
@@ -51,8 +51,8 @@ El esquema de base de datos se encuentra en `database/medicita.sql`; el contrato
 1. Clona el repositorio y entra en la carpeta del proyecto:
 
    ```bash
-   git clone https://github.com/Asm0deus00/Medi-citas-Proyecto-C2.git
-   cd Medi-citas-Proyecto-C2
+   git clone https://github.com/Asm0deus00/Medi-citas-C2-Repo-Final.git
+   cd Medi-citas-C2-Repo-Final
    ```
 
 2. Crea el esquema y las tablas ejecutando `database/medicita.sql` en MySQL Workbench o desde el cliente de MySQL. El script crea la base de datos `medicita_db` e inserta algunas especialidades iniciales.
@@ -75,6 +75,8 @@ El esquema de base de datos se encuentra en `database/medicita.sql`; el contrato
    SESSION_SECRET=usa_un_secreto_aleatorio_de_32_caracteres_o_mas
    ```
 
+   Opcionalmente, `PRIVATE_IMAGES_DIR` define la carpeta de imágenes de imagenología (por defecto, `private_images/`).
+
 5. Inicia el servidor:
 
    ```bash
@@ -87,13 +89,13 @@ La dirección de Swagger indicada es local: solo estará disponible mientras el 
 
 ## Autenticación y uso de la API
 
-El endpoint de inicio de sesión es `POST /api/auth/login`. Cuando las credenciales son válidas, la API devuelve un token Bearer con una duración de una hora. En Swagger UI, utiliza el botón **Authorize** para introducir el token y probar los endpoints protegidos.
+El endpoint de inicio de sesión es `POST /api/sessions`. Cuando las credenciales son válidas, la API devuelve un token Bearer con una duración de una hora. En Swagger UI, utiliza el botón **Authorize** para introducir el token y probar los endpoints protegidos.
 
 Algunos endpoints principales son:
 
 | Método | Endpoint | Propósito |
 |---|---|---|
-| `POST` | `/api/auth/login` | Iniciar sesión |
+| `POST` | `/api/sessions` | Iniciar sesión |
 | `GET` | `/api/doctors` | Consultar profesionales activos |
 | `GET` | `/api/doctors/{id}/availability?date=YYYY-MM-DD` | Consultar disponibilidad de un profesional |
 | `GET` | `/api/appointments` | Consultar citas permitidas para el usuario autenticado |
@@ -115,6 +117,7 @@ El proyecto incluye pruebas automatizadas con el ejecutor de pruebas integrado d
 
 ```bash
 npm test
+npm run format:check
 ```
 
 Estas pruebas no sustituyen una validación integral de la API con MySQL. Antes de considerar una ejecución verificada, inicia la base de datos y prueba en Swagger o Postman los flujos principales, tanto los casos exitosos como las respuestas de error.
