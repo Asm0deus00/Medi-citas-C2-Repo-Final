@@ -16,8 +16,13 @@ function optionalText(value, field, limit = 255) {
 }
 
 function integer(value, field, min = 1) {
-  if (value === '' || value == null || typeof value === 'boolean' ||
-      !Number.isSafeInteger(Number(value)) || Number(value) < min) {
+  if (
+    value === '' ||
+    value == null ||
+    typeof value === 'boolean' ||
+    !Number.isSafeInteger(Number(value)) ||
+    Number(value) < min
+  ) {
     throw new ApiError(400, `${field} debe ser un entero mayor o igual a ${min}`);
   }
   return Number(value);
@@ -49,11 +54,27 @@ function dateTime(value) {
   const second = Number(secondText);
   const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
 
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 ||
-      date.getUTCDate() !== day || hour > 23 || minute > 59 || second > 59) {
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day ||
+    hour > 23 ||
+    minute > 59 ||
+    second > 59
+  ) {
     throw new ApiError(400, 'La fecha u hora no existe');
   }
   return value.replace('T', ' ').slice(0, 19);
+}
+
+function date(value) {
+  const invalid = new ApiError(400, 'Fecha inválida: use YYYY-MM-DD');
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw invalid;
+  const parsedDate = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== value) {
+    throw invalid;
+  }
+  return value;
 }
 
 function choice(value, field, allowed) {
@@ -70,8 +91,13 @@ function price(value) {
 }
 
 function measurement(value, field) {
-  if (value === null || value === undefined || value === '' ||
-      typeof value === 'boolean' || !Number.isFinite(Number(value))) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === '' ||
+    typeof value === 'boolean' ||
+    !Number.isFinite(Number(value))
+  ) {
     throw new ApiError(400, `${field} debe ser un número`);
   }
   const numericValue = Number(value);
@@ -79,4 +105,15 @@ function measurement(value, field) {
   return numericValue;
 }
 
-module.exports = { requiredText, optionalText, integer, id, email, dateTime, choice, price, measurement };
+module.exports = {
+  requiredText,
+  optionalText,
+  integer,
+  id,
+  email,
+  date,
+  dateTime,
+  choice,
+  price,
+  measurement
+};
