@@ -24,8 +24,8 @@ async function send(method, path, body) {
   return response.status;
 }
 
-test('POST /sessions existe y valida el cuerpo antes de consultar la base de datos', async () => {
-  assert.equal(await send('POST', '/sessions', {}), 400);
+test('POST /users/sessions existe y valida el cuerpo antes de consultar la base de datos', async () => {
+  assert.equal(await send('POST', '/users/sessions', {}), 400);
 });
 
 test('La ruta anterior con verbo ya no existe', async () => {
@@ -33,7 +33,7 @@ test('La ruta anterior con verbo ya no existe', async () => {
 });
 
 test('Los recursos privados exigen sesión', async () => {
-  for (const path of ['/appointments', '/reviews', '/medical-results', '/review_tags']) {
+  for (const path of ['/appointments', '/reviews', '/medical-results', '/review-tags']) {
     assert.equal(await send('GET', path), 401, path);
   }
 });

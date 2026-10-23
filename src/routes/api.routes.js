@@ -7,13 +7,13 @@ const resultRoutes = require('./result.routes');
 
 const router = express.Router();
 
-router.use('/sessions', sessionRoutes);
+router.use('/users/sessions', sessionRoutes);
 router.use('/patients', catalogRouters.patients);
 router.use('/users', catalogRouters.users);
 router.use('/doctors', catalogRouters.doctors);
 router.use('/specialties', catalogRouters.specialties);
-router.use('/doctor_schedules', catalogRouters.doctorSchedules);
-router.use('/review_tags', catalogRouters.reviewTags);
+router.use('/doctor-schedules', catalogRouters.doctorSchedules);
+router.use('/review-tags', catalogRouters.reviewTags);
 router.use('/appointments', appointmentRoutes);
 router.use('/reviews', reviewRoutes);
 router.use('/medical-results', resultRoutes);
