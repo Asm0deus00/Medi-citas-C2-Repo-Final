@@ -1,5 +1,6 @@
-const pool = require('../config/database');
 const repository = require('../repositories/base.repository');
+const resultRepository = require('../repositories/result.repository');
+const patientRepository = require('../repositories/patient.repository');
 const { runInTransaction } = require('../repositories/transaction');
 const validate = require('../utils/validate');
 const { ApiError } = require('../utils/errors');
@@ -15,32 +16,18 @@ const RESULT_TYPES = Object.keys(DETAIL_TABLES);
 const IMAGE_FILE_PATTERN = /^[a-zA-Z0-9_-]+\.(png|jpe?g|pdf)$/i;
 
 async function list(patientId, resultType) {
-  const conditions = [];
-  const parameters = [];
-  if (patientId !== undefined) {
-    conditions.push('patient_id = ?');
-    parameters.push(validate.id(patientId));
-  }
-  if (resultType !== undefined) {
-    conditions.push('result_type = ?');
-    parameters.push(validate.choice(resultType, 'type', RESULT_TYPES));
-  }
-  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  const [results] = await pool.query(
-    `SELECT * FROM medical_results ${whereClause} ORDER BY id DESC`,
-    parameters
-  );
-  return results;
+  return resultRepository.findAll({
+    patientId: patientId === undefined ? undefined : validate.id(patientId),
+    resultType:
+      resultType === undefined ? undefined : validate.choice(resultType, 'type', RESULT_TYPES)
+  });
 }
 
 async function get(resultId) {
   const result = await repository.one('medical_results', validate.id(resultId));
   if (!result) throw new ApiError(404, 'Resultado no encontrado');
-  const [details] = await pool.query('SELECT * FROM ?? WHERE result_id = ?', [
-    DETAIL_TABLES[result.result_type],
-    result.id
-  ]);
-  return { ...result, detail: details[0] || null };
+  const detail = await resultRepository.findDetail(DETAIL_TABLES[result.result_type], result.id);
+  return { ...result, detail };
 }
 
 const DETAIL_PARSERS = Object.freeze({
@@ -71,51 +58,31 @@ function parseDetail(resultType, body) {
   return DETAIL_PARSERS[resultType](body);
 }
 
-async function insertResult(connection, { patientId, examName, resultType, detail }) {
-  const [patients] = await connection.query('SELECT id FROM patients WHERE id = ?', [patientId]);
-  if (!patients.length) throw new ApiError(404, 'Paciente no encontrado');
-
-  const [created] = await connection.query(
-    'INSERT INTO medical_results (patient_id, exam_name, result_type) VALUES (?, ?, ?)',
-    [patientId, examName, resultType]
-  );
-  const columns = Object.keys(detail);
-  const columnPlaceholders = columns.map(() => '??').join(', ');
-  const valuePlaceholders = columns.map(() => '?').join(', ');
-  await connection.query(
-    `INSERT INTO ?? (result_id, ${columnPlaceholders}) VALUES (?, ${valuePlaceholders})`,
-    [
-      DETAIL_TABLES[resultType],
-      ...columns,
-      created.insertId,
-      ...columns.map((column) => detail[column])
-    ]
-  );
-  return created.insertId;
-}
-
 async function create(body) {
   const patientId = validate.id(body.patient_id);
   const examName = validate.requiredText(body.exam_name, 'exam_name');
   const resultType = validate.choice(body.result_type, 'result_type', RESULT_TYPES);
   const detail = parseDetail(resultType, body);
 
-  const resultId = await runInTransaction((connection) =>
-    insertResult(connection, { patientId, examName, resultType, detail })
-  );
+  const resultId = await runInTransaction(async (connection) => {
+    if (!(await patientRepository.exists(connection, patientId))) {
+      throw new ApiError(404, 'Paciente no encontrado');
+    }
+    return resultRepository.insertWithDetail(connection, {
+      patientId,
+      examName,
+      resultType,
+      detailTable: DETAIL_TABLES[resultType],
+      detail
+    });
+  });
   return get(resultId);
 }
 
 async function edit(resultId, body) {
   const current = await get(resultId);
   const detail = parseDetail(current.result_type, { ...current.detail, ...body });
-  const columns = Object.keys(detail);
-  const assignments = columns.map(() => '?? = ?').join(', ');
-  await pool.query(`UPDATE ?? SET ${assignments} WHERE result_id = ?`, [
-    DETAIL_TABLES[current.result_type],
-    ...columns.flatMap((column) => [column, detail[column]]),
-    current.id
-  ]);
+  await resultRepository.updateDetail(DETAIL_TABLES[current.result_type], current.id, detail);
   return get(current.id);
 }
 

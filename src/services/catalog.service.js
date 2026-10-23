@@ -1,5 +1,6 @@
 const repository = require('../repositories/base.repository');
-const pool = require('../config/database');
+const doctorRepository = require('../repositories/doctor.repository');
+const patientRepository = require('../repositories/patient.repository');
 const validate = require('../utils/validate');
 const { ApiError } = require('../utils/errors');
 
@@ -94,37 +95,14 @@ function omitPassword(user) {
   return publicUser;
 }
 
-async function listActiveDoctors() {
-  const [doctors] = await pool.query(`
-    SELECT doctor.id, doctor.full_name, doctor.specialty_id,
-           specialty.name AS specialty_name, doctor.schedule_description,
-           doctor.consultation_price, doctor.profile, doctor.active
-    FROM doctors AS doctor
-    INNER JOIN specialties AS specialty ON specialty.id = doctor.specialty_id
-    WHERE doctor.active = 1
-    ORDER BY doctor.full_name
-  `);
-  const [schedules] = await pool.query(
-    'SELECT doctor_id, weekday, start_time, end_time FROM doctor_schedules ORDER BY weekday, start_time'
-  );
-  return doctors.map((doctor) => ({
-    ...doctor,
-    schedules: schedules.filter((schedule) => schedule.doctor_id === doctor.id)
-  }));
-}
-
 async function searchPatients(searchText) {
   const searchTerm = validate.requiredText(searchText, 'search', 100);
-  const [patients] = await pool.query(
-    'SELECT * FROM patients WHERE full_name LIKE ? OR email LIKE ? ORDER BY id',
-    [`%${searchTerm}%`, `%${searchTerm}%`]
-  );
-  return patients;
+  return patientRepository.searchByNameOrEmail(searchTerm);
 }
 
 async function list(resourceName, query = {}) {
   getResourceDefinition(resourceName);
-  if (resourceName === 'doctors') return listActiveDoctors();
+  if (resourceName === 'doctors') return doctorRepository.findActiveWithSchedules();
   if (resourceName === 'patients' && query.search !== undefined) {
     return searchPatients(query.search);
   }
@@ -148,10 +126,8 @@ async function create(resourceName, body) {
 
   const fields = parseFields(definition, body || {});
   if (resourceName === 'users') {
-    const [[patient]] = await pool.query('SELECT email FROM patients WHERE id = ?', [
-      fields.patient_id
-    ]);
-    if (!patient || patient.email !== fields.email) {
+    const patientEmail = await patientRepository.findEmailById(fields.patient_id);
+    if (patientEmail !== fields.email) {
       throw new ApiError(400, 'El correo de la cuenta debe coincidir con el del paciente');
     }
   }

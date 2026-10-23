@@ -1,5 +1,7 @@
-const pool = require('../config/database');
 const repository = require('../repositories/base.repository');
+const appointmentRepository = require('../repositories/appointment.repository');
+const doctorRepository = require('../repositories/doctor.repository');
+const patientRepository = require('../repositories/patient.repository');
 const { runInTransaction } = require('../repositories/transaction');
 const validate = require('../utils/validate');
 const { buildFreeSlots } = require('../utils/schedule');
@@ -11,26 +13,12 @@ const {
 } = require('../config/constants');
 
 const APPOINTMENT_STATUSES = ['scheduled', 'completed', 'cancelled'];
-// Lunes = 1 ... domingo = 0, igual que doctor_schedules.weekday
-const WEEKDAY_SQL = 'MOD(WEEKDAY(?) + 1, 7)';
 
 async function list(patientId, date) {
-  const conditions = [];
-  const parameters = [];
-  if (patientId !== undefined) {
-    conditions.push('patient_id = ?');
-    parameters.push(validate.id(patientId));
-  }
-  if (date !== undefined) {
-    conditions.push('DATE(starts_at) = ?');
-    parameters.push(validate.date(date));
-  }
-  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  const [appointments] = await pool.query(
-    `SELECT * FROM appointments ${whereClause} ORDER BY starts_at DESC`,
-    parameters
-  );
-  return appointments;
+  return appointmentRepository.findAll({
+    patientId: patientId === undefined ? undefined : validate.id(patientId),
+    date: date === undefined ? undefined : validate.date(date)
+  });
 }
 
 async function get(appointmentId) {
@@ -39,31 +27,15 @@ async function get(appointmentId) {
   return appointment;
 }
 
-async function findActiveDoctor(doctorId) {
-  const [doctors] = await pool.query('SELECT id FROM doctors WHERE id = ? AND active = 1', [
-    doctorId
-  ]);
-  if (!doctors.length) throw new ApiError(404, 'Médico no disponible');
-}
-
 async function availability(doctorId, date) {
   const validDoctorId = validate.id(doctorId);
   const validDate = validate.date(date);
-  await findActiveDoctor(validDoctorId);
+  if (!(await doctorRepository.isActive(validDoctorId))) {
+    throw new ApiError(404, 'Médico no disponible');
+  }
 
-  const [workingBlocks] = await pool.query(
-    `SELECT start_time, end_time FROM doctor_schedules
-     WHERE doctor_id = ? AND weekday = ${WEEKDAY_SQL} ORDER BY start_time`,
-    [validDoctorId, validDate]
-  );
-  const [busyRanges] = await pool.query(
-    `SELECT HOUR(starts_at) * 60 + MINUTE(starts_at) AS startMinute,
-            duration_minutes AS durationMinutes
-     FROM appointments
-     WHERE doctor_id = ? AND status <> 'cancelled' AND DATE(starts_at) = ?`,
-    [validDoctorId, validDate]
-  );
-
+  const workingBlocks = await doctorRepository.findWorkingBlocks(validDoctorId, validDate);
+  const busyRanges = await appointmentRepository.findBusyRanges(validDoctorId, validDate);
   const slots = buildFreeSlots({
     date: validDate,
     workingBlocks,
@@ -97,61 +69,25 @@ function parseBooking(body) {
 }
 
 async function lockBookableDoctor(connection, { patientId, doctorId }) {
-  const [[patient]] = await connection.query('SELECT id FROM patients WHERE id = ?', [patientId]);
-  const [[doctor]] = await connection.query(
-    'SELECT consultation_price, active FROM doctors WHERE id = ? FOR UPDATE',
-    [doctorId]
-  );
-  if (!patient || !doctor || !doctor.active) {
+  const patientExists = await patientRepository.exists(connection, patientId);
+  const doctor = await doctorRepository.lockForBooking(connection, doctorId);
+  if (!patientExists || !doctor || !doctor.active) {
     throw new ApiError(400, 'Paciente o médico no disponible');
   }
   return doctor;
-}
-
-async function assertNoConflict(connection, { doctorId, startsAt, durationMinutes }) {
-  const [conflicts] = await connection.query(
-    `SELECT id FROM appointments
-     WHERE doctor_id = ? AND status <> 'cancelled'
-       AND starts_at < DATE_ADD(?, INTERVAL ? MINUTE)
-       AND DATE_ADD(starts_at, INTERVAL duration_minutes MINUTE) > ?
-     LIMIT 1`,
-    [doctorId, startsAt, durationMinutes, startsAt]
-  );
-  if (conflicts.length) throw new ApiError(409, 'El médico ya tiene una cita en ese horario');
-}
-
-async function assertWithinSchedule(connection, { doctorId, startsAt, durationMinutes }) {
-  const [blocks] = await connection.query(
-    `SELECT id FROM doctor_schedules
-     WHERE doctor_id = ? AND weekday = ${WEEKDAY_SQL}
-       AND TIME(?) >= start_time
-       AND TIME(DATE_ADD(?, INTERVAL ? MINUTE)) <= end_time
-       AND DATE(DATE_ADD(?, INTERVAL ? MINUTE)) = DATE(?)
-     LIMIT 1`,
-    [doctorId, startsAt, startsAt, startsAt, durationMinutes, startsAt, durationMinutes, startsAt]
-  );
-  if (!blocks.length) {
-    throw new ApiError(409, 'La cita está fuera del horario de atención del médico');
-  }
-}
-
-async function insertAppointment(connection, booking, priceAtBooking) {
-  const [result] = await connection.query(
-    `INSERT INTO appointments
-       (patient_id, doctor_id, starts_at, duration_minutes, price_at_booking, status)
-     VALUES (?, ?, ?, ?, ?, 'scheduled')`,
-    [booking.patientId, booking.doctorId, booking.startsAt, booking.durationMinutes, priceAtBooking]
-  );
-  return result.insertId;
 }
 
 async function create(body) {
   const booking = parseBooking(body);
   const appointmentId = await runInTransaction(async (connection) => {
     const doctor = await lockBookableDoctor(connection, booking);
-    await assertNoConflict(connection, booking);
-    await assertWithinSchedule(connection, booking);
-    return insertAppointment(connection, booking, doctor.consultation_price);
+    if (await appointmentRepository.hasConflict(connection, booking)) {
+      throw new ApiError(409, 'El médico ya tiene una cita en ese horario');
+    }
+    if (!(await doctorRepository.hasWorkingBlockFor(connection, booking))) {
+      throw new ApiError(409, 'La cita está fuera del horario de atención del médico');
+    }
+    return appointmentRepository.insertScheduled(connection, booking, doctor.consultation_price);
   });
   return get(appointmentId);
 }
